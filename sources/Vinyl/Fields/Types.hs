@@ -10,8 +10,8 @@
 
 -}
 module Vinyl.Fields.Types where
--- import Vinyl.Fields.Extra
-import Prelude.Spiros 
+import Vinyl.Fields.Extra
+-- import Prelude.Spiros 
 
 -- import Control.Applicative
 -- import Control.Monad
@@ -26,15 +26,22 @@ import Data.Functor.Identity
 import GHC.TypeLits
 import GHC.OverloadedLabels
 import Data.Kind 
-import Data.Functor.Compose 
+-- import Data.Functor.Compose 
+import Data.Functor.Classes
 
 --------------------------------------------------------------------------------
 
 {-| 
 
-`fields` should be a type-level set (i.e. `Map Symbol *`), 
-since we don't want duplicate field names, and since we don't care about order,
+`fields` should be a type-level map (i.e. `Map Symbol *`), 
+since we don't want duplicate field names, 
+and since we don't care about the order of the keys,
 but GHC currently only has type-level lists. 
+
+@cs@ should be a type-level set (i.e. `Set (* -> Constraint)`), 
+since we don't care about the order of the constraints 
+(Haskell doesn't order @(C1 a, C2 a) => ...@,
+they're all eventually applied).
 
 @
 >>> :set -XDataKinds
@@ -43,23 +50,29 @@ but GHC currently only has type-level lists.
 @
 
 -}
-data Record :: (* -> *) 
+data Record :: [* -> Constraint] 
+            -> (* -> *) 
             -> [(Symbol,*)]
             -> *
     where
 
-    R      :: forall f. Record f '[]
+    R      :: Record cs f '[]
 
-    (:*)   :: (Field k f a) 
-           -> (Record f            fields) 
-           -> (Record f ('(k,a) ': fields))
+    (:*)   :: (Field k cs f a) 
+           -> (Record cs f            fields) 
+           -> (Record cs f ('(k,a) ': fields))
 
 {-| like @f@ composed with a @KnownSymbol@ dictionary. 
 almost an @Identity@ functor.
 
 -}
-data Field k f a where
-     Field :: forall k f a. (KnownSymbol k) => !(f a) -> Field k f a 
+data Field k cs f a where
+  Field :: forall k cs f a. 
+           ( KnownSymbol k
+           , AllSatisfied cs a
+           ) 
+        => !(f a) 
+        -> Field k cs f a 
 
 infixr 7 :*
 infix  8 -:
@@ -132,55 +145,77 @@ type family AllConstrained c ts :: Constraint where
 -- data Dictionary1 c a where
 --   Dictionary1 :: c a => a -> Dict c a
 
-data Constrained c a where
-    Constrained :: forall c a. 
-                ( c a
-                ) 
-                => !a 
-                -> Constrained c a 
+type family AllSatisfied cs t :: Constraint where
+    AllSatisfied '[]       t = ()
+    AllSatisfied (c ': cs) t = (c t, AllSatisfied cs t)
 
-data Constrained' c k f a where
-    Constrained' :: forall c k f a. 
-                ( c a
-                , KnownSymbol k
-                ) 
-                => !(f a) 
-                -> Constrained' c k f a 
+-- data Constrained c a where
+--     Constrained :: forall c a. 
+--                 ( c a
+--                 ) 
+--                 => !a 
+--                 -> Constrained c a 
+
+-- data Constrained' c k f a where
+--     Constrained' :: forall c k f a. 
+--                 ( c a
+--                 , KnownSymbol k
+--                 ) 
+--                 => !(f a) 
+--                 -> Constrained' c k f a 
 
 --------------------------------------------------------------------------------
 
 -- the empty symbol is not a valid key
 -- injectGeneralRecord :: V.Rec f as -> Record f (FMAP ("",) as)
 
-reifyConstraint
-  :: AllTypes c kvs 
-  => proxy c
-  -> Record f kvs
-  -> Record (Compose (Constrained c) f) kvs
-reifyConstraint proxy = \case
-  R -> R
-  (x :* xs) -> Compose (Constrained x) :* reifyConstraint proxy xs
+-- reifyConstraint
+--   :: AllTypes c kvs 
+--   => proxy c
+--   -> Record f kvs
+--   -> Record (Compose (Constrained c) f) kvs
+-- reifyConstraint proxy = \case
+--   R -> R
+--   (x :* xs) -> Compose (Constrained x) :* reifyConstraint proxy xs
 
-displayRecord :: Record f fields -> String 
+displayRecord 
+  :: forall f fields. (Show1 f) 
+  => Record '[Show] f fields -> String 
 displayRecord r = "{ " <> go r <> " }"
     where
-    go :: Record f' fields' -> String 
+    go :: forall fields'. Record '[Show] f fields' -> String 
     go R         = ""
     go (f :* fs) = displayField f <> ", " <> go fs 
 
-displayField :: (Show (f a)) => Field k f a -> String 
+displayField :: (Show1 f) => Field k '[Show] f a -> String 
 displayField f@(Field x) = k <> ": " <> v
    where
    k = reifyFieldName f
+   v = show1 x
+
+displayIdentityRecord 
+  :: forall fields.
+     Record '[Show] Identity fields -> String 
+displayIdentityRecord r = "{ " <> intercalate ", " (go r) <> " }"
+    where
+    go :: forall fields'. Record '[Show] Identity fields' -> [String] 
+    go R         = []
+    go (f :* fs) = displayIdentityField f : go fs 
+
+displayIdentityField :: Field k '[Show] Identity a -> String 
+displayIdentityField f@(Field (Identity x)) = k <> ": " <> v
+   where
+   k = reifyFieldName f
    v = show x
- 
-reifyFieldName :: forall k f a. Field k f a -> String 
+
+reifyFieldName :: forall k cs f a. Field k cs f a -> String 
 reifyFieldName Field{} = symbolVal (Proxy :: Proxy k)
 
-(**) :: forall k a fields. (KnownSymbol k) 
+(**) :: forall k cs a fields. 
+     (KnownSymbol k, AllSatisfied cs a) 
      => a 
-     -> Record Identity            fields
-     -> Record Identity ('(k,a) ': fields)
+     -> Record cs Identity            fields
+     -> Record cs Identity ('(k,a) ': fields)
 x ** xs = Field (Identity x) :* xs
 
 {-| uses `-XTypeApplications`.
@@ -194,7 +229,10 @@ TODO AllowAmbiguousTypes
 @
 
 -}
-field :: forall (k :: Symbol) f a. (KnownSymbol k) => f a -> (Field k) f a
+field
+  :: forall (k :: Symbol) cs f a. 
+  (KnownSymbol k, AllSatisfied cs a) 
+  => f a -> (Field k) cs f a
 field = Field
 
 {-NOTE
@@ -247,6 +285,8 @@ field = Field
 -- mfield :: forall k a f. (KnownSymbol k, Applicative f) => a -> f a
 -- mfield = pure
 
+-------------------------------------------------------------------------------
+
 {-| uses `-XOverloadedLabels`.
 
 @
@@ -265,6 +305,8 @@ data Label k where Label :: (KnownSymbol k) => Label k
 
 instance (KnownSymbol k) => IsLabel k (Label k) where
     fromLabel = Label
+
+-------------------------------------------------------------------------------
 
 {-
 Orphan instance: instance IsLabel k (Proxy k)

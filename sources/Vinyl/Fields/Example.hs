@@ -24,10 +24,14 @@ main = do
 
 mainWith s = do
  putStrLn s
+ putStrLn $ displayRecord         dog_TypeApplications
+ putStrLn $ displayIdentityRecord dog_TypeApplications
 
-type Dog f = Record f ["name" ::: String, "age" ::: Int]
+type Dog f = 
+    Record '[Show] f ["name" ::: String, "age" ::: Int]
 
-dog_TypeApplications = field @"name" (I "loki") :* field @"age" (I @Int 7) :* R
+dog_TypeApplications = 
+    field @"name" (I "loki") :* field @"age" (I @Int 7) :* R
 
 -- dog_ifield = ifield @"name" "loki" :* ifield @"age" @Int 7 :* R
 
