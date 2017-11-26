@@ -1,12 +1,5 @@
-resolver: lts-8.12
-compiler: ghc-8.0.2
-
-nix:
-  # enable: true
-  pure: true
-  packages:
-  - zlib
-  # shell-file: shell.nix
+resolver: nightly-2017-11-24
+compiler: ghc-8.2.1
 
 packages:
 - ./

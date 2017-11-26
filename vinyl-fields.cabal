@@ -81,31 +81,21 @@ library
              , hashable
              , semigroups
 
---              , transformers
---              , mtl
---              , containers
---              , bytestring
---              , stm
---              , template-haskell
+             , vinyl 
 
---              , lens
---              , exceptions
---              , free
---              , bifunctors
---              , profunctors
---              , either
---              , pipes
---              , formatting
---              , servant
---              , Earley
---              , split
---              , interpolatedstring-perl6
---              , wl-pprint-text
---              , text
---              , aeson
---              , unordered-containers
---              , async
---              , parallel
+            --  , transformers
+            --  , mtl
+
+            --  , containers
+            --  , unordered-containers
+
+            --  , text 
+            --  , bytestring
+
+            --  , lens
+            --  , exceptions
+
+            --  , aeson
 
 
 executable example-vinyl-fields
@@ -120,54 +110,54 @@ executable example-vinyl-fields
   , vinyl-fields
 
 
--- $ stack test doctest
-test-suite doctest
- hs-source-dirs:      tests
- main-is:             DocTest.hs
- type:                exitcode-stdio-1.0
+-- -- $ stack test doctest
+-- test-suite doctest
+--  hs-source-dirs:      tests
+--  main-is:             DocTest.hs
+--  type:                exitcode-stdio-1.0
 
- default-language:    Haskell2010
- ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+--  default-language:    Haskell2010
+--  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
- build-depends:
-    base
-  , vinyl-fields
-  , doctest
-
-
--- $ stack test unittest
-test-suite unittest
- hs-source-dirs:      tests
- main-is:             UnitTest.hs
- type:                exitcode-stdio-1.0
-
- default-language:    Haskell2010
- ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
-
- other-modules:
-  Vinyl.Fields.Test
-
- build-depends:
-    base
-  , vinyl-fields
-  , hspec ==2.2.*
-  , QuickCheck ==2.8.*
-  -- , tasty
-  -- , tasty-quickcheck
+--  build-depends:
+--     base
+--   , vinyl-fields
+--   , doctest
 
 
--- $ stack bench
-benchmark command
- hs-source-dirs:      benchmarks
- main-is:             Bench.hs
- type:                exitcode-stdio-1.0
+-- -- $ stack test unittest
+-- test-suite unittest
+--  hs-source-dirs:      tests
+--  main-is:             UnitTest.hs
+--  type:                exitcode-stdio-1.0
 
- default-language: Haskell2010
- ghc-options:      -Wall -threaded -rtsopts -with-rtsopts=-N
+--  default-language:    Haskell2010
+--  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
- build-depends:
-    base
-  , vinyl-fields
-  , criterion
-  , deepseq
+--  other-modules:
+--   Vinyl.Fields.Test
+
+--  build-depends:
+--     base
+--   , vinyl-fields
+--   , hspec ==2.2.*
+--   , QuickCheck ==2.8.*
+--   -- , tasty
+--   -- , tasty-quickcheck
+
+
+-- -- $ stack bench
+-- benchmark command
+--  hs-source-dirs:      benchmarks
+--  main-is:             Bench.hs
+--  type:                exitcode-stdio-1.0
+
+--  default-language: Haskell2010
+--  ghc-options:      -Wall -threaded -rtsopts -with-rtsopts=-N
+
+--  build-depends:
+--     base
+--   , vinyl-fields
+--   , criterion
+--   , deepseq
 
