@@ -75,6 +75,7 @@ data Field k cs f a where
         -> Field k cs f a 
 
 infixr 7 :*
+infixr 7 ***
 infix  8 -:
 -- infixr 5  <+>
 -- infixl 8 <<$>>
@@ -211,16 +212,14 @@ displayIdentityField f@(Field (Identity x)) = k <> ": " <> v
 reifyFieldName :: forall k cs f a. Field k cs f a -> String 
 reifyFieldName Field{} = symbolVal (Proxy :: Proxy k)
 
-(**) :: forall k cs a fields. 
+(***) :: forall k cs a fields. 
      (KnownSymbol k, AllSatisfied cs a) 
      => a 
      -> Record cs Identity            fields
      -> Record cs Identity ('(k,a) ': fields)
-x ** xs = Field (Identity x) :* xs
+x *** xs = Field (Identity x) :* xs
 
 {-| uses `-XTypeApplications`.
-
-TODO AllowAmbiguousTypes
 
 @
 >>> :set -XTypeApplications
@@ -230,7 +229,7 @@ TODO AllowAmbiguousTypes
 
 -}
 field
-  :: forall (k :: Symbol) cs f a. 
+  :: forall (k :: Symbol) a. forall cs f. 
   (KnownSymbol k, AllSatisfied cs a) 
   => f a -> (Field k) cs f a
 field = Field
@@ -243,47 +242,50 @@ field = Field
 
 -}
 
--- {-| uses `-XTypeApplications`.
+{-| uses `-XTypeApplications`.
 
--- TODO AllowAmbiguousTypes
+@
+>>> :set -XTypeApplications
+>>> :set -XDataKinds
+>>> dog = ifield @"name" "loki" :* ifield @"age" 7 :* R
+@
 
--- @
--- >>> :set -XTypeApplications
--- >>> :set -XDataKinds
--- >>> dog = field @"name" "loki" :* field @"age" 7 :* R
--- @
+-}
+ifield 
+  :: forall (k :: Symbol) a. forall cs. 
+  (KnownSymbol k, AllSatisfied cs a) 
+  => a -> (Field k) cs Identity a
+ifield = Identity > field
 
--- -}
--- ifield :: forall k a. (KnownSymbol k) => a -> Identity a
--- ifield = Identity 
+{-| uses `-XTypeApplications`.
 
--- {-| uses `-XTypeApplications`.
+@
+>>> :set -XTypeApplications
+>>> :set -XDataKinds
+>>> dog = cfield @"name" "loki" :* cfield @"age" @Int (show 7) :* R
+@
 
--- TODO AllowAmbiguousTypes
+-}
+cfield 
+  :: forall (k :: Symbol) b. forall a cs. 
+  (KnownSymbol k, AllSatisfied cs b) 
+  => a -> (Field k) cs (Const a) b -- cs='[]
+cfield = Const > field
 
--- @
--- >>> :set -XTypeApplications
--- >>> :set -XDataKinds
--- >>> dog = field @"name" "loki" :* field @"age" 7 :* R
--- @
+{-| uses `-XTypeApplications`.
 
--- -}
--- cfield :: forall k a b. (KnownSymbol k) => b -> Const b a 
--- cfield = Const
+@
+>>> :set -XTypeApplications
+>>> :set -XDataKinds
+>>> dog = mfield @"name" "loki" :* mfield @"age" @Int 7 :* R
+@
 
--- {-| uses `-XTypeApplications`.
-
--- TODO AllowAmbiguousTypes
-
--- @
--- >>> :set -XTypeApplications
--- >>> :set -XDataKinds
--- >>> dog = field @"name" "loki" :* field @"age" 7 :* R
--- @
-
--- -}
--- mfield :: forall k a f. (KnownSymbol k, Applicative f) => a -> f a
--- mfield = pure
+-}
+mfield
+  :: forall (k :: Symbol) a. forall f cs. 
+  (KnownSymbol k, AllSatisfied cs a, Applicative f) 
+  => a -> (Field k) cs f a
+mfield = pure > field
 
 -------------------------------------------------------------------------------
 
@@ -301,7 +303,8 @@ Label -: x = x
 -- NOTE the proxy must be concrete for the inference of IsLabel
 
 -- | like 'Proxy' for 'Symbols'. 
-data Label k where Label :: (KnownSymbol k) => Label k
+data Label k where 
+  Label :: (KnownSymbol k) => Label k
 
 instance (KnownSymbol k) => IsLabel k (Label k) where
     fromLabel = Label
