@@ -24,8 +24,9 @@ import Prelude.Spiros
 import Data.Functor.Identity
 
 import GHC.TypeLits
-import Data.Kind 
 import GHC.OverloadedLabels
+import Data.Kind 
+import Data.Functor.Compose 
 
 --------------------------------------------------------------------------------
 
@@ -43,19 +44,25 @@ but GHC currently only has type-level lists.
 
 -}
 data Record :: (* -> *) 
-            -> [(Symbol,Type)]
-            -> Type
+            -> [(Symbol,*)]
+            -> *
     where
 
-    R      :: Record f '[]
+    R      :: forall f. Record f '[]
 
-    (:*)   :: (KnownSymbol k) 
-           => !(f a) 
-           -> !(Record f            fields) 
-           ->   Record f ('(k,a) ': fields)
+    (:*)   :: (Field k f a) 
+           -> (Record f            fields) 
+           -> (Record f ('(k,a) ': fields))
+
+{-| like @f@ composed with a @KnownSymbol@ dictionary. 
+almost an @Identity@ functor.
+
+-}
+data Field k f a where
+     Field :: forall k f a. (KnownSymbol k) => !(f a) -> Field k f a 
 
 infixr 7 :*
-infix 8 -:
+infix  8 -:
 -- infixr 5  <+>
 -- infixl 8 <<$>>
 -- infixl 8 <<*>>
@@ -71,11 +78,110 @@ infix 8 -:
 -}
 type (:::) k a = '(k, a) 
 
+{-| constrain each field name in a record with the first constraint @ck@ (frequently, `KnownSymbol`), 
+and constrain each field type in that record with the second constraint @cv@. 
+
+for example, 
+
+@
+(AllFields KnownSymbol Show \'["enabled" ::: Bool, "setting" ::: String]) => ...
+@ 
+
+is equivalent to 
+
+@
+(KnownSymbol "enabled", KnownSymbol "setting", Show Bool, Show String) => ... 
+@ 
+
+which says that the field names must be type-level strings, 
+and that the field types must all be showable.
+
+thus, a generic record function with this constraint can print out the key-value pairs 
+of any input record that satisfies those constraints:
+
+@
+showRecord :: (AllFields KnownSymbol Show fields) => 'Record' fields -> String 
+showRecord RNil      = ...
+showRecord (a :& as) = ... 
+@
+
+-}
+type AllFields cName cType fields = (AllNames cName fields, AllTypes cType fields)
+
+type AllNames c fields = AllConstrained c (GetNames fields)
+type AllTypes c fields = AllConstrained c (GetTypes fields)
+
+-- | a type level @fmap fst@
+type family GetNames fields where 
+  GetNames '[]                    = '[] 
+  GetNames ('(k, _v) ': fields) = k ': GetNames fields 
+
+-- | a type level @fmap snd@
+type family GetTypes fields where 
+  GetTypes '[]                    = '[] 
+  GetTypes ('(_k, v) ': fields) = v ': GetTypes fields 
+
+type family AllConstrained c ts :: Constraint where
+  AllConstrained c '[] = ()
+  AllConstrained c (t ': ts) = (c t, AllConstrained c ts)
+
+-- data Dictionary c a where
+--   Dictionary :: c a => a -> Dict c a
+-- data Dictionary0 c a where
+--     Dictionary0 :: c a => a -> Dict c a
+-- data Dictionary1 c a where
+--   Dictionary1 :: c a => a -> Dict c a
+
+data Constrained c a where
+    Constrained :: forall c a. 
+                ( c a
+                ) 
+                => !a 
+                -> Constrained c a 
+
+data Constrained' c k f a where
+    Constrained' :: forall c k f a. 
+                ( c a
+                , KnownSymbol k
+                ) 
+                => !(f a) 
+                -> Constrained' c k f a 
+
+--------------------------------------------------------------------------------
+
+-- the empty symbol is not a valid key
+-- injectGeneralRecord :: V.Rec f as -> Record f (FMAP ("",) as)
+
+reifyConstraint
+  :: AllTypes c kvs 
+  => proxy c
+  -> Record f kvs
+  -> Record (Compose (Constrained c) f) kvs
+reifyConstraint proxy = \case
+  R -> R
+  (x :* xs) -> Compose (Constrained x) :* reifyConstraint proxy xs
+
+displayRecord :: Record f fields -> String 
+displayRecord r = "{ " <> go r <> " }"
+    where
+    go :: Record f' fields' -> String 
+    go R         = ""
+    go (f :* fs) = displayField f <> ", " <> go fs 
+
+displayField :: (Show (f a)) => Field k f a -> String 
+displayField f@(Field x) = k <> ": " <> v
+   where
+   k = reifyFieldName f
+   v = show x
+ 
+reifyFieldName :: forall k f a. Field k f a -> String 
+reifyFieldName Field{} = symbolVal (Proxy :: Proxy k)
+
 (**) :: forall k a fields. (KnownSymbol k) 
      => a 
      -> Record Identity            fields
      -> Record Identity ('(k,a) ': fields)
-x ** xs = Identity x :* xs
+x ** xs = Field (Identity x) :* xs
 
 {-| uses `-XTypeApplications`.
 
@@ -88,8 +194,8 @@ TODO AllowAmbiguousTypes
 @
 
 -}
-field :: forall (k :: Symbol) a. a -> a
-field = id
+field :: forall (k :: Symbol) f a. (KnownSymbol k) => f a -> (Field k) f a
+field = Field
 
 {-NOTE
 
@@ -417,6 +523,24 @@ data Record :: (functor :: Symbol -> Type -> Type)
            -> !(Record f fields) 
            -> Record f ('(k,a) ': fields)
 
+
+-------------------------------------------------------------------------------
+
+the unquantified variable is ignored.
+
+> :t dog_TypeApplications
+
+error:
+    * No instance for (Show
+                         (Record
+                            Data.Functor.Identity.Identity
+'['(k10, [Char]), '(k20, Int)]))
+        arising from a use of `print'
+    * In a stmt of an interactive GHCi command: print it
+*Vinyl.Fields.Example> :t dog_TypeApplications
+dog_TypeApplications
+  :: (GHC.TypeLits.KnownSymbol k1, GHC.TypeLits.KnownSymbol k2) =>
+     Record Data.Functor.Identity.Identity '['(k1, [Char]), '(k2, Int)]
 
 -------------------------------------------------------------------------------
 

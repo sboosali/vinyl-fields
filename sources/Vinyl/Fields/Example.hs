@@ -31,4 +31,4 @@ dog_TypeApplications = field @"name" (I "loki") :* field @"age" (I @Int 7) :* R
 
 -- dog_ifield = ifield @"name" "loki" :* ifield @"age" @Int 7 :* R
 
--- dog_XOverloadedLabels = #name -: "loki" :* R -- #age -: 7 :* R
+-- dog_XOverloadedLabels = (#name -: "loki") :* R -- #age -: 7 :* R
