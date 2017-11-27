@@ -1,6 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE KindSignatures, TypeOperators #-}
+{-# LANGUAGE KindSignatures, TypeOperators, TypeApplications #-}
 {-# LANGUAGE TypeFamilies, ConstraintKinds, PolyKinds #-} 
 {-# LANGUAGE ScopedTypeVariables, DataKinds, FlexibleInstances, FlexibleContexts, UndecidableInstances, GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, RankNTypes #-}
@@ -75,8 +75,11 @@ data Field k cs f a where
         -> Field k cs f a 
 
 infixr 7 :*
-infixr 7 ***
+-- infixr 7 ***
+
 infix  8 -:
+infix  8 =:
+
 -- infixr 5  <+>
 -- infixl 8 <<$>>
 -- infixl 8 <<*>>
@@ -182,11 +185,11 @@ type family AllSatisfied cs t :: Constraint where
 displayRecord 
   :: forall f fields. (Show1 f) 
   => Record '[Show] f fields -> String 
-displayRecord r = "{ " <> go r <> " }"
+displayRecord r = "{ " <> intercalate ", " (go r) <> " }"
     where
-    go :: forall fields'. Record '[Show] f fields' -> String 
-    go R         = ""
-    go (f :* fs) = displayField f <> ", " <> go fs 
+    go :: forall fields'. Record '[Show] f fields' -> [String] 
+    go R         = []
+    go (f :* fs) = displayField f : go fs 
 
 displayField :: (Show1 f) => Field k '[Show] f a -> String 
 displayField f@(Field x) = k <> ": " <> v
@@ -212,12 +215,12 @@ displayIdentityField f@(Field (Identity x)) = k <> ": " <> v
 reifyFieldName :: forall k cs f a. Field k cs f a -> String 
 reifyFieldName Field{} = symbolVal (Proxy :: Proxy k)
 
-(***) :: forall k cs a fields. 
-     (KnownSymbol k, AllSatisfied cs a) 
-     => a 
-     -> Record cs Identity            fields
-     -> Record cs Identity ('(k,a) ': fields)
-x *** xs = Field (Identity x) :* xs
+-- (***) :: forall k cs a fields. 
+--      (KnownSymbol k, AllSatisfied cs a) 
+--      => a 
+--      -> Record cs Identity            fields
+--      -> Record cs Identity ('(k,a) ': fields)
+-- x *** xs = Field (Identity x) :* xs
 
 {-| uses `-XTypeApplications`.
 
@@ -298,16 +301,59 @@ mfield = pure > field
 @
 
 -}
-(-:) :: forall k a. (KnownSymbol k) => Label k -> a -> a
-Label -: x = x
+(-:) 
+  :: (AllSatisfied cs a) 
+  => Label k -> f a -> Field k cs f a
+Label -: x = Field x
 -- NOTE the proxy must be concrete for the inference of IsLabel
+
+(=:)
+  :: (AllSatisfied cs a) 
+  => Label k -> a -> Field k cs Identity a
+Label =: x = Field (Identity x)
+
+{-ERROR
+
+C:\Users\Spiros\haskell\vinyl-fields\sources\Vinyl\Fields\Example.hs:31:35-55: error:
+    * Ambiguous type variable `k0' arising from a use of `dog_XOverloadedLabels'
+      prevents the constraint `(GHC.OverloadedLabels.IsLabel
+                                  "age" (Label k0))' from being solved.
+      Probable fix: use a type annotation to specify what `k0' should be.
+      These potential instance exist:
+        instance GHC.TypeLits.KnownSymbol k =>
+                 GHC.OverloadedLabels.IsLabel k (Label k)
+
+
+KnownSymbol k, IsLabel k (Label k), 
+
+-}
+
+-- (=:) :: forall k a. () => Label k -> a -> a
+-- Label =: x = x
 
 -- | like 'Proxy' for 'Symbols'. 
 data Label k where 
-  Label :: (KnownSymbol k) => Label k
+  Label :: forall k. (KnownSymbol k) => Label k
 
-instance (KnownSymbol k) => IsLabel k (Label k) where
-    fromLabel = Label
+label :: forall k. forall proxy. (KnownSymbol k) => proxy k -> Label k
+label _ = Label @k
+
+instance forall k k'. (KnownSymbol k, k ~ k') => IsLabel k (Label k') where
+    fromLabel = Label @k -- label (Proxy @k)
+
+{- NOTE needs the constraint trick for inference
+
+*Vinyl.Fields.Example> :t dog_XOverloadedLabels
+dog_XOverloadedLabels
+  :: (GHC.TypeLits.KnownSymbol k1, GHC.TypeLits.KnownSymbol k2,
+      GHC.OverloadedLabels.IsLabel "name" (Label k1),
+      GHC.OverloadedLabels.IsLabel "age" (Label k2),
+      AllSatisfied cs [Char], AllSatisfied cs Int) =>
+     Record
+       cs Data.Functor.Identity.Identity '['(k1, [Char]), '(k2, Int)]
+
+
+-}
 
 -------------------------------------------------------------------------------
 
