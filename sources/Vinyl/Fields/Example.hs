@@ -6,6 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-} -- to test inference
 module Vinyl.Fields.Example where
 import Vinyl.Fields
+--import Vinyl.Fields.Json 
 import System.Environment
 
 {-|
@@ -42,6 +43,10 @@ mainWith s = do
  putStrLn $ displayRecord dog_XOverloadedLabels
  putStrLn $ displayRecord dog_XOverloadedLabels_Identity
 -- putStrLn $ displayRecord dog_XOverloadedLabels_polymorphic
+
+ putStrLn ""
+ -- print $ dog_XOverloadedLabels_Identity
+ print (dog_XOverloadedLabels_Identity :: Dog I)
 
 type Dog f = 
     Record '[Show] f ["name" ::: String, "age" ::: Int]

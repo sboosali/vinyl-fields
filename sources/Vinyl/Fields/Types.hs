@@ -11,16 +11,8 @@
 -}
 module Vinyl.Fields.Types where
 import Vinyl.Fields.Extra
--- import Prelude.Spiros 
+import Vinyl.Fields.Core
 
--- import Control.Applicative
--- import Control.Monad
-
--- import Data.Vinyl hiding (ElField(..))
--- import Data.Vinyl.TypeLevel 
--- -- import Data.Aeson
--- -- import Data.Aeson.Types
--- import qualified Data.Text.Lazy as T
 import Data.Functor.Identity
 
 import GHC.TypeLits
@@ -62,6 +54,58 @@ data Record :: [* -> Constraint]
            -> (Record cs f            fields) 
            -> (Record cs f ('(k,a) ': fields))
 
+-- -- instance (Show `In` cs) => Show (Record cs f as) where
+-- instance (AllTypes Show as) => Show (Record cs f as) where
+--   show = showRecord
+instance (AllTypes Show kvs, Show1 f) => Show (Record cs f kvs) where
+  show = showRecord
+
+showRecord 
+  :: (AllTypes Show as, Show1 f) 
+  => (Record cs f as) -> String
+showRecord r = showShowableRecord (reifyConstraint cShow r)
+   where
+   cShow = P @Show  -- P @(Type -> Constraint) @Show
+
+showShowableRecord 
+  :: forall f cs as. (Show1 f) 
+  => Record (Show ': cs) f as 
+  -> String
+showShowableRecord 
+  = mapRecord _show
+  > recordToList > (<> ["R"])
+  > intercalate " :* "
+  where
+  _show :: forall k. forall a.
+           Field k (Show ': cs) f          a 
+        -> Field k (Show ': cs) (C String) a
+--        -> Field k cs           (C String) a
+  _show f@(Field{}) = f & showField > cfield @k
+
+-- showRecord 
+--   :: (AllTypes Show as, Show1 f) 
+--   => (Record cs f as) -> String
+-- showRecord r = showShowableRecord (reifyConstraint cShow r)
+--    where
+--    cShow = P @Show -- P @(Type -> Constraint) @Show
+-- -- the polykinded Proxy needs the kind first!
+
+-- showShowableRecord 
+--   :: (Show1 f) 
+--   => Record (Show ': cs) f as 
+--   -> String
+-- showShowableRecord = rmap _show > recordToList > intercalate " :* " --  > rmap f2c
+--   where
+--   _show x = C $ show1 x
+
+-- | A record with uniform fields may be turned into a list.
+recordToList
+  :: Record cs (Const a) bs
+  -> [a]
+recordToList = \case
+  R               -> []
+  (Field x :* xs) -> getConst x : recordToList xs
+
 {-| like @f@ composed with a @KnownSymbol@ dictionary. 
 almost an @Identity@ functor.
 
@@ -74,11 +118,49 @@ data Field k cs f a where
         => !(f a) 
         -> Field k cs f a 
 
+-- | 'showField'
+instance (Show1 f) => Show (Field k (Show ': cs) f a) where
+  show = showField 
+
+showField :: (Show1 f) => Field k (Show ': cs) f a -> String  
+showField f@(Field x) = "Field @" <> k <> " (" <> v <> ")"
+   where
+   k = reifyFieldName f
+   v = show1 x
+
+-- instance (Show (f a)) => Show (Field k cs f a) where
+--   show = showField 
+
+-- showField :: (Show (f a)) => Field k cs f a -> String 
+-- showField f@(Field x) = "Field @" <> k <> " (" <> v <> ")"
+--    where
+--    k = reifyFieldName f
+--    v = show x
+-- -- Field k (Show ': cs) f a -> String 
+
 infixr 7 :*
 infixr 1 ***
 
 infix  2 -:
 infix  2 =:
+
+rmap
+  :: (forall x. (c x) => f x -> g x)
+  -> Record (c ': cs) f rs
+  -> Record (c ': cs) g rs
+rmap η = \case
+  R -> R
+  (Field x :* xs) -> Field (η x) :* (η `rmap` xs)
+{-# INLINE rmap #-}
+
+mapRecord
+  :: (forall x k. Field k (c ': cs) f x -> Field k (c ': cs) g x)
+  -> Record (c ': cs) f rs
+  -> Record (c ': cs) g rs
+mapRecord η = \case
+  R -> R
+  (Field x :* xs) -> η (Field x) :* (η `mapRecord` xs)
+{-# INLINE mapRecord #-}
 
 -- infixr 5  <+>
 -- infixl 8 <<$>>
@@ -173,14 +255,15 @@ type family AllSatisfied cs t :: Constraint where
 -- the empty symbol is not a valid key
 -- injectGeneralRecord :: V.Rec f as -> Record f (FMAP ("",) as)
 
--- reifyConstraint
---   :: AllTypes c kvs 
---   => proxy c
---   -> Record f kvs
---   -> Record (Compose (Constrained c) f) kvs
--- reifyConstraint proxy = \case
---   R -> R
---   (x :* xs) -> Compose (Constrained x) :* reifyConstraint proxy xs
+reifyConstraint
+  :: forall (c :: * -> Constraint) cs f kvs proxy. 
+     ( AllTypes c kvs )
+  => proxy c
+  -> Record cs        f kvs
+  -> Record (c ': cs) f kvs
+reifyConstraint proxy = \case
+  R -> R
+  (Field x :* xs) -> (Field x) :* reifyConstraint proxy xs
 
 displayRecord 
   :: forall f fields. (Show1 f) 
