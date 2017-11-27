@@ -68,6 +68,7 @@ library
                  Vinyl.Fields
                  Vinyl.Fields.Types
                  Vinyl.Fields.Core		 
+                 Vinyl.Fields.Json		 
 -- other-modules:
                  Vinyl.Fields.Extra
                  Vinyl.Fields.Example
@@ -86,16 +87,16 @@ library
             --  , transformers
             --  , mtl
 
-            --  , containers
-            --  , unordered-containers
+            , containers
+            , unordered-containers
 
-            --  , text 
-            --  , bytestring
+            , text 
+            , bytestring
 
             --  , lens
             --  , exceptions
 
-            --  , aeson
+            , aeson
 
 
 executable example-vinyl-fields

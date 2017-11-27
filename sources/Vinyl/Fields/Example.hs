@@ -9,6 +9,9 @@ import Vinyl.Fields
 --import Vinyl.Fields.Json 
 import System.Environment
 
+import Data.Functor.Identity
+-- import GHC.TypeLits
+
 {-|
 
 @
@@ -48,11 +51,26 @@ mainWith s = do
  -- print $ dog_XOverloadedLabels_Identity
 
  -- print (dog_XOverloadedLabels_Identity :: Dog I)
- -- print $ dropConstraints dog_XOverloadedLabels_Identity 
- print $ constrain @Show dog_XOverloadedLabels_Identity' 
+--  print $ dropConstraints' dog_XOverloadedLabels_Identity1 
+--  print $ unconstrained    dog_XOverloadedLabels_Identity2 
+--  print $ constrain @Show  dog_XOverloadedLabels_Identity3 
+--  print $ dropConstraints' dog_XOverloadedLabels_Identity' 
+--  print $ unconstrained    dog_XOverloadedLabels_Identity' 
+--  print $ constrain @Show  dog_XOverloadedLabels_Identity'
  
+ print $ unconstrained    dog_XOverloadedLabels_Identity1 
+ print $ constrain' @Show dog_XOverloadedLabels_Identity2
+
+ putStrLn ""
+ print $ (fmap . fmap) (constrain' @Show) dog_XOverloadedLabels_list
+
 type Dog f = 
     Record '[Show] f ["name" ::: String, "age" ::: Int]
+
+dog_Readable
+  = Field @"name" (Identity "loki") 
+ :* Field @"age"  (Identity 7) 
+ :* R
 
 dog_Annotated :: Dog I
 dog_Annotated =
@@ -74,6 +92,22 @@ dog_XOverloadedLabels =
 --     (#name =: "loki") :* (#age =: 7) :* R -- defaults to integer, i.e. infers correctly
 
 dog_XOverloadedLabels_Identity = 
+    (#name =: "loki") :* (#age =: (7::Int)) :* R
+
+-- tests precedent/grouping of the show instance 
+dog_XOverloadedLabels_list = 
+    [ Right $ (#name =: "loki") :* (#age =: (7::Int)) :* R
+    , Right $ (#name =: "loki") :* (#age =: (7::Int)) :* R
+    , Left "" 
+    ]
+
+dog_XOverloadedLabels_Identity1 = 
+    (#name =: "loki") :* (#age =: (7::Int)) :* R
+
+dog_XOverloadedLabels_Identity2 = 
+    (#name =: "loki") :* (#age =: (7::Int)) :* R
+
+dog_XOverloadedLabels_Identity3 = 
     (#name =: "loki") :* (#age =: (7::Int)) :* R
 
 {-

@@ -1,5 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
+-- {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE KindSignatures, TypeOperators, TypeApplications #-}
 {-# LANGUAGE TypeFamilies, ConstraintKinds, PolyKinds #-} 
 {-# LANGUAGE ScopedTypeVariables, DataKinds, FlexibleInstances, FlexibleContexts, UndecidableInstances, GADTs #-}
@@ -19,9 +19,24 @@ import GHC.TypeLits
 import GHC.OverloadedLabels
 import Data.Kind 
 -- import Data.Functor.Compose 
-import Data.Functor.Classes
+import Data.Functor.Classes (Show1(..), showsPrec1) 
+-- import Data.Foldable (fold) 
 
 --------------------------------------------------------------------------------
+
+infixr 7 :*
+infixr 1 ***
+
+infix  2 -:
+infix  2 =:
+
+-- | the default precedence for application of alphanumeric functions
+defaultPrecedence :: Int 
+defaultPrecedence = 10
+
+-- | must match the precedence of the @(':*)@ operator. for the custom 'Show' instance. 
+precedenceOfRecordCons :: Int 
+precedenceOfRecordCons = 7
 
 {-| 
 
@@ -58,29 +73,76 @@ data Record :: [* -> Constraint]
 -- instance (AllTypes Show as) => Show (Record cs f as) where
 --   show = showRecord
 instance (AllTypes Show kvs, Show1 f) => Show (Record cs f kvs) where
-  show = showRecord
+  -- show = showRecord
+  showsPrec = showsPrecedent_Record
 
-showRecord 
+showsPrecedent_Record 
   :: (AllTypes Show as, Show1 f) 
-  => (Record cs f as) -> String
-showRecord r = showShowableRecord (reifyConstraint cShow r)
+  => Showing (Record cs f as) 
+showsPrecedent_Record d r = showParen (d `greaterThan` defaultPrecedence) $
+   showsPrecedent_Record' d (reifyConstraint cShow r)
    where
    cShow = P @Show  -- P @(Type -> Constraint) @Show
 
-showShowableRecord 
+showsPrecedent_Record' 
   :: forall f cs as. (Show1 f) 
-  => Record (Show ': cs) f as 
-  -> String
-showShowableRecord 
+  => Showing (Record (Show ': cs) f as) 
+showsPrecedent_Record' _d
   = mapRecord _show
-  > recordToList > (<> ["R"])
-  > intercalate " :* "
+  > recordToList -- > (undefined :: () -> ())
+  -- > reverse 
+  > (<> [s "R"])
+  > intersperse (s " :* ") 
+  > foldl (.) id
+  -- > intercalate id
+  -- > foldl (<>) mempty -- NO fold/foldr had the incorrect associativity; foldl doesn't work either 
+  -- > mconcat
+  -- > fmap ($"") > mconcat > s 
+  -- > fmap ($"") > mconcat > s -- doesn't work, its just like show
   where
-  _show :: forall k. forall a.
-           Field k (Show ': cs) f          a 
---      -> Field k (Show ': cs) (C String) a
-        -> Field k cs           (C String) a
-  _show f@(Field{}) = f & showField > cfield @k
+  s = showString    
+  _show :: forall k. forall x.
+           Field k (Show ': cs) f         x
+        -> Field k cs           (C ShowS) x
+  _show f@(Field{}) = cfield @k $ 
+      -- showParen (d `greaterThan` defaultPrecedence) $ 
+          -- showsPrec d f -- (1+defaultPrecedence) f
+      -- showParen (d `greaterThan` precedenceOfRecordCons) $ 
+          showsPrec (1+precedenceOfRecordCons) f
+
+-- | transform the functors, 
+-- consuming the constraint and matching the field name. 
+-- 
+-- FieldTransformation k Show cs f (C ShowS) a
+type FieldTransformation k c cs f g x
+   = Field k (c ': cs) f x
+  -> Field k cs        g x
+
+-- FieldTransformation' Show f (C ShowS)
+type FieldTransformation' c f g
+   = (forall k cs x. FieldTransformation k c cs f g x)
+
+  -- showRecord 
+--   :: (AllTypes Show as, Show1 f) 
+--   => (Record cs f as) -> String
+-- showRecord r = showShowableRecord (reifyConstraint cShow r)
+--    where
+--    cShow = P @Show  -- P @(Type -> Constraint) @Show
+
+-- showShowableRecord 
+--   :: forall f cs as. (Show1 f) 
+--   => Record (Show ': cs) f as 
+--   -> String
+-- showShowableRecord 
+--   = mapRecord _show
+--   > recordToList > (<> ["R"])
+--   > intercalate " :* "
+--   where
+--   _show :: forall k. forall a.
+--            Field k (Show ': cs) f          a 
+-- --      -> Field k (Show ': cs) (C String) a
+--         -> Field k cs           (C String) a
+--   _show f@(Field{}) = f & showField > cfield @k
 
 -- showRecord 
 --   :: (AllTypes Show as, Show1 f) 
@@ -110,8 +172,15 @@ recordToList = \case
 almost an @Identity@ functor.
 
 -}
-data Field k cs f a where
-  Field :: forall k cs f a. 
+data Field 
+  :: Symbol             -- otherwise, TypeApplication doesn't work with the constructor 
+  -> [* -> Constraint] 
+  -> (* -> *) 
+  -> *
+  -> *
+  where
+
+  Field :: forall (k :: Symbol) cs f a. 
            ( KnownSymbol k
            , AllSatisfied cs a
            ) 
@@ -120,7 +189,19 @@ data Field k cs f a where
 
 -- | 'showField'
 instance (Show1 f) => Show (Field k (Show ': cs) f a) where
-  show = showField 
+  showsPrec = showsPrecedent_Field
+  -- show = showField 
+
+showsPrecedent_Field 
+  :: (Show1 f) 
+  => Showing (Field k (Show ': cs) f a) 
+showsPrecedent_Field d f@(Field x) = showParen (d `greaterThan` defaultPrecedence) $
+--   (s "Field @" <> k <> s " " <> v)
+   (s "Field @" . k . s " " . v)
+   where
+   k = showString $ show (reifyFieldName f)
+   v = showsPrec1 (1+defaultPrecedence) x
+   s = showString
 
 showField :: (Show1 f) => Field k (Show ': cs) f a -> String  
 showField f@(Field x) = "Field @" <> k <> " (" <> v <> ")"
@@ -137,12 +218,6 @@ showField f@(Field x) = "Field @" <> k <> " (" <> v <> ")"
 --    k = reifyFieldName f
 --    v = show x
 -- -- Field k (Show ': cs) f a -> String 
-
-infixr 7 :*
-infixr 1 ***
-
-infix  2 -:
-infix  2 =:
 
 rmap
   :: (forall x. (c x) => f x -> g x)
@@ -166,6 +241,35 @@ mapRecord η = \case
 -- infixr 5  <+>
 -- infixl 8 <<$>>
 -- infixl 8 <<*>>
+
+unconstrained
+  :: (cs ~ '[]) 
+  => Record cs  f kvs
+  -> Record '[] f kvs
+unconstrained = mapRecord go
+  where
+  go :: Field k cs f x -> Field k '[] f x
+  go (Field x) = Field x
+
+constrain' 
+  :: forall (c :: * -> Constraint).
+     forall cs cs' f kvs. 
+     ( AllTypes c kvs
+     , cs  ~ '[] 
+     , cs' ~ '[c]
+     )
+  => Record cs  f kvs
+  -> Record cs' f kvs
+constrain' = dropConstraints' > reifyConstraint (P @c)
+
+dropConstraints'
+  :: (cs' ~ '[], cs' ~ cs) 
+  => Record cs  f kvs
+  -> Record cs' f kvs
+dropConstraints' = mapRecord go
+  where
+  go :: Field k cs f x -> Field k '[] f x
+  go (Field x) = Field x
 
 constrain 
   :: forall (c :: * -> Constraint).
