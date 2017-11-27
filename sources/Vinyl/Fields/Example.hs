@@ -34,7 +34,7 @@ mainWith s = do
 --  putStrLn $ displayIdentityRecord dog_XOverloadedLabels_polymorphic
 
  putStrLn ""
- putStrLn $ displayIdentityRecord dog_XOverloadedLabels_Identity'
+ putStrLn $ displayIdentityRecord dog_XOverloadedLabels_Identity
 
  putStrLn ""
  putStrLn $ displayRecord dog_TypeApplications
@@ -46,8 +46,11 @@ mainWith s = do
 
  putStrLn ""
  -- print $ dog_XOverloadedLabels_Identity
- print (dog_XOverloadedLabels_Identity :: Dog I)
 
+ -- print (dog_XOverloadedLabels_Identity :: Dog I)
+ -- print $ dropConstraints dog_XOverloadedLabels_Identity 
+ print $ constrain @Show dog_XOverloadedLabels_Identity' 
+ 
 type Dog f = 
     Record '[Show] f ["name" ::: String, "age" ::: Int]
 
@@ -73,6 +76,15 @@ dog_XOverloadedLabels =
 dog_XOverloadedLabels_Identity = 
     (#name =: "loki") :* (#age =: (7::Int)) :* R
 
+{-
+
+@
+{ name = "loki"
+, age  = 7
+}
+@
+
+-}
 dog_XOverloadedLabels_Identity' 
     =  #name =: "loki"
   ***  #age  =: (7::Int)

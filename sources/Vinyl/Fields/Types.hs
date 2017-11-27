@@ -78,8 +78,8 @@ showShowableRecord
   where
   _show :: forall k. forall a.
            Field k (Show ': cs) f          a 
-        -> Field k (Show ': cs) (C String) a
---        -> Field k cs           (C String) a
+--      -> Field k (Show ': cs) (C String) a
+        -> Field k cs           (C String) a
   _show f@(Field{}) = f & showField > cfield @k
 
 -- showRecord 
@@ -154,17 +154,60 @@ rmap η = \case
 {-# INLINE rmap #-}
 
 mapRecord
-  :: (forall x k. Field k (c ': cs) f x -> Field k (c ': cs) g x)
-  -> Record (c ': cs) f rs
-  -> Record (c ': cs) g rs
+  :: (forall x k. Field k cs f x -> Field k ds g x)
+  -> Record cs f rs
+  -> Record ds g rs
 mapRecord η = \case
   R -> R
   (Field x :* xs) -> η (Field x) :* (η `mapRecord` xs)
 {-# INLINE mapRecord #-}
+-- :: (forall x k. Field k (c ': cs) f x -> Field k (c ': cs) g x)
 
 -- infixr 5  <+>
 -- infixl 8 <<$>>
 -- infixl 8 <<*>>
+
+constrain 
+  :: forall (c :: * -> Constraint).
+     forall cs f kvs. 
+     ( AllTypes c kvs
+     )
+  => Record cs   f kvs
+  -> Record '[c] f kvs
+constrain = dropConstraints > reifyConstraint (P @c)
+
+dropConstraints
+  :: Record cs  f kvs
+  -> Record '[] f kvs
+dropConstraints = mapRecord go
+  where
+  go :: Field k cs f x -> Field k '[] f x
+  go (Field x) = Field x
+
+-- constrain = reifyConstraint (P @c) > loosenConstraints
+
+-- loosenConstraints
+--   :: (ds `Subset` cs) 
+--   => Record cs f kvs
+--   -> Record ds f kvs
+-- loosenConstraints
+
+-- constrain 
+--   :: forall (c :: * -> Constraint).
+--      forall cs f kvs. 
+--      ( AllTypes c kvs
+--      )
+--   => Record (     cs) f kvs
+--   -> Record (c ': cs) f kvs
+-- constrain = reifyConstraint (P @c)
+
+{- ERROR
+
+    * Could not deduce: (AllSatisfied cs0 Int, AllSatisfied cs0 [Char])
+        arising from a use of dog_XOverloadedLabels_Identity'
+    * In the second argument of `constrain', namely
+    
+-}
 
 {-| sugar for a type-level pair.
 
@@ -257,7 +300,8 @@ type family AllSatisfied cs t :: Constraint where
 
 reifyConstraint
   :: forall (c :: * -> Constraint) cs f kvs proxy. 
-     ( AllTypes c kvs )
+     ( AllTypes c kvs 
+     )
   => proxy c
   -> Record cs        f kvs
   -> Record (c ': cs) f kvs
@@ -298,11 +342,25 @@ displayIdentityField f@(Field (Identity x)) = k <> " = " <> v
 reifyFieldName :: forall k cs f a. Field k cs f a -> String 
 reifyFieldName Field{} = symbolVal (Proxy :: Proxy k)
 
-(***) :: (KnownSymbol k, AllSatisfied cs a) 
-     => Field k cs f a
-     -> Record cs f            fields
-     -> Record cs f ('(k,a) ': fields)
+(***) :: (KnownSymbol k) 
+     => Field k '[] f a
+     -> Record '[] f            fields
+     -> Record '[] f ('(k,a) ': fields)
 (***) = (:*)
+
+{-ERROR
+
+    * Could not deduce: (AllSatisfied cs0 Int, AllSatisfied cs0 [Char])
+        arising from a use of `dog_XOverloadedLabels_Identity'
+    * In the first argument of `dropConstraints', namely
+        `dog_XOverloadedLabels_Identity'
+
+-- (***) :: (KnownSymbol k, AllSatisfied cs a) 
+--      => Field k cs f a
+--      -> Record cs f            fields
+--      -> Record cs f ('(k,a) ': fields)
+-- (***) = (:*)
+-}
 
 -- (***) :: forall k cs a fields. 
 --      (KnownSymbol k, AllSatisfied cs a) 
