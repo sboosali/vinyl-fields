@@ -32,6 +32,10 @@ mainWith s = do
 --  putStrLn $ displayIdentityRecord dog_XOverloadedLabels_Identity
 --  putStrLn $ displayIdentityRecord dog_XOverloadedLabels_polymorphic
 
+ putStrLn ""
+ putStrLn $ displayIdentityRecord dog_XOverloadedLabels_Identity'
+
+ putStrLn ""
  putStrLn $ displayRecord dog_TypeApplications
 -- putStrLn $ displayRecord dog_Identity
  putStrLn $ displayRecord dog_ifield
@@ -58,8 +62,13 @@ dog_ifield =
 dog_XOverloadedLabels = 
     (#name -: (I "loki")) :* (#age -: (I @Int 7)) :* R
 
+-- dog_XOverloadedLabels_polymorphic = 
+--     (#name =: "loki") :* (#age =: 7) :* R -- defaults to integer, i.e. infers correctly
+
 dog_XOverloadedLabels_Identity = 
     (#name =: "loki") :* (#age =: (7::Int)) :* R
 
--- dog_XOverloadedLabels_polymorphic = 
---     (#name =: "loki") :* (#age =: 7) :* R -- defaults to integer, i.e. infers correctly
+dog_XOverloadedLabels_Identity' 
+    =  #name =: "loki"
+  ***  #age  =: (7::Int)
+  ***  R

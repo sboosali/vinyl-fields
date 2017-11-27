@@ -75,10 +75,10 @@ data Field k cs f a where
         -> Field k cs f a 
 
 infixr 7 :*
--- infixr 7 ***
+infixr 1 ***
 
-infix  8 -:
-infix  8 =:
+infix  2 -:
+infix  2 =:
 
 -- infixr 5  <+>
 -- infixl 8 <<$>>
@@ -207,13 +207,19 @@ displayIdentityRecord r = "{ " <> intercalate ", " (go r) <> " }"
     go (f :* fs) = displayIdentityField f : go fs 
 
 displayIdentityField :: Field k '[Show] Identity a -> String 
-displayIdentityField f@(Field (Identity x)) = k <> ": " <> v
+displayIdentityField f@(Field (Identity x)) = k <> " = " <> v
    where
    k = reifyFieldName f
    v = show x
 
 reifyFieldName :: forall k cs f a. Field k cs f a -> String 
 reifyFieldName Field{} = symbolVal (Proxy :: Proxy k)
+
+(***) :: (KnownSymbol k, AllSatisfied cs a) 
+     => Field k cs f a
+     -> Record cs f            fields
+     -> Record cs f ('(k,a) ': fields)
+(***) = (:*)
 
 -- (***) :: forall k cs a fields. 
 --      (KnownSymbol k, AllSatisfied cs a) 
