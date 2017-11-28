@@ -93,8 +93,9 @@ library
             , text 
             , bytestring
 
-            --  , lens
+            , lens
             --  , exceptions
+            , constraints 
 
             , aeson
 

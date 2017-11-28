@@ -21,6 +21,9 @@ import Data.Kind
 -- import Data.Functor.Compose 
 import Data.Functor.Classes (Show1(..), showsPrec1) 
 -- import Data.Foldable (fold) 
+import Data.Constraint 
+
+type Dictionary = Dict
 
 --------------------------------------------------------------------------------
 
@@ -45,9 +48,9 @@ type Record_ f = Record '[] f
 
 type Field_ k f = Field k '[] f 
 
-type R cs = IRecord cs 
+type R = IRecord_ 
 
-type F k cs = IField k cs 
+type F k = IField_ k
 
 -- | 
 type IRecord cs = Record cs Identity 
@@ -61,6 +64,12 @@ type PRecord cs = Record cs Proxy
 -- | 
 type PField k cs = Field k cs Proxy 
 
+-- | a record with a single constraint 
+type RecordOf c f = Record '[c] f
+
+-- | a field with a single constraint 
+type FieldOf k c f = Field k '[c] f
+
 -- | 
 type IRecord_ = IRecord '[] 
 
@@ -72,6 +81,7 @@ type PRecord_ = PRecord '[]
 
 -- | 
 type PField_ k = PField k '[] 
+
 
 field_ 
   :: forall (k :: Symbol). 
@@ -134,7 +144,7 @@ showsPrecedent_Record'
   :: forall f cs as. (Show1 f) 
   => Showing (Record (Show ': cs) f as) 
 showsPrecedent_Record' _d
-  = mapRecord _show
+  = mapRecordFields _show
   > recordToList -- > (undefined :: () -> ())
   -- > reverse 
   > (<> [s "R"])
@@ -267,6 +277,15 @@ showField f@(Field x) = "Field @" <> k <> " (" <> v <> ")"
 --    v = show x
 -- -- Field k (Show ': cs) f a -> String 
 
+mapRecordFunctors
+  :: (forall x. f x -> g x)
+  -> Record cs f rs
+  -> Record cs g rs
+mapRecordFunctors η = \case
+  R -> R
+  ((Field x) :* xs) -> Field (η x) :* (η `mapRecordFunctors` xs)
+{-# INLINE mapRecordFunctors #-}
+
 rmap
   :: (forall x. (c x) => f x -> g x)
   -> Record (c ': cs) f rs
@@ -276,14 +295,14 @@ rmap η = \case
   (Field x :* xs) -> Field (η x) :* (η `rmap` xs)
 {-# INLINE rmap #-}
 
-mapRecord
+mapRecordFields
   :: (forall x k. Field k cs f x -> Field k ds g x)
   -> Record cs f rs
   -> Record ds g rs
-mapRecord η = \case
+mapRecordFields η = \case
   R -> R
-  (Field x :* xs) -> η (Field x) :* (η `mapRecord` xs)
-{-# INLINE mapRecord #-}
+  (Field x :* xs) -> η (Field x) :* (η `mapRecordFields` xs)
+{-# INLINE mapRecordFields #-}
 -- :: (forall x k. Field k (c ': cs) f x -> Field k (c ': cs) g x)
 
 -- infixr 5  <+>
@@ -304,7 +323,7 @@ unconstrained
   :: (cs ~ '[]) 
   => Record cs  f kvs
   -> Record '[] f kvs
-unconstrained = mapRecord go
+unconstrained = mapRecordFields go
   where
   go :: Field k cs f x -> Field k '[] f x
   go (Field x) = Field x
@@ -324,7 +343,7 @@ dropConstraints'
   :: (cs' ~ '[], cs' ~ cs) 
   => Record cs  f kvs
   -> Record cs' f kvs
-dropConstraints' = mapRecord go
+dropConstraints' = mapRecordFields go
   where
   go :: Field k cs f x -> Field k '[] f x
   go (Field x) = Field x
@@ -341,7 +360,7 @@ constrain = dropConstraints > reifyConstraint (P @c)
 dropConstraints
   :: Record cs  f kvs
   -> Record '[] f kvs
-dropConstraints = mapRecord go
+dropConstraints = mapRecordFields go
   where
   go :: Field k cs f x -> Field k '[] f x
   go (Field x) = Field x
@@ -457,16 +476,18 @@ type family AllSatisfied cs t :: Constraint where
 
 --------------------------------------------------------------------------------
 
-class RecordApplicative kvs where
+class {- forall kvs. -} RecordApplicative kvs where
   rPure
-    :: (forall x. f x)
+    :: forall f. (forall x. f x)
     -> Record_ f kvs
 
 instance RecordApplicative '[] where
   rPure _ = R
   {-# INLINE rPure #-}
 
-instance (KnownSymbol k, RecordApplicative kvs) 
+instance ( KnownSymbol k
+         , RecordApplicative kvs
+         ) 
        => RecordApplicative ('(k,v) ': kvs) 
   where
   rPure s = field_ s :* rPure s
@@ -490,6 +511,124 @@ proxyRecordOf
   -> PRecord_ fields 
 proxyRecordOf _ = proxyRecord @fields 
 
+-- dictionaryRecord 
+--   :: forall constraint fields. 
+--      ( RecordApplicative fields
+--      , AllTypes constraint fields 
+--      ) 
+--   => DRecord fields 
+-- dictionaryRecord = constrain @constraint (rPure Proxy) 
+
+-- {-| a record where each field is constructed 
+-- from the methods of some class.
+
+-- -}
+-- methodRecord 
+--   :: forall c fields f.  
+--      ( AllTypes c fields
+--      , RecordApplicative fields
+--      )
+--   => (forall x. (c x) => f x)
+--   -> Record_ f fields 
+-- methodRecord u = methodRecord' go
+--   where
+--   go :: forall x. Dictionary (c x) -> f x
+--   go = (\d -> withDict d u) 
+
+{-| a record where each field is constructed 
+from the methods of some class.
+
+-}
+methodRecord' 
+  :: forall c fields f.  
+     ( AllTypes c fields
+     , RecordApplicative fields
+     )
+  => (forall x. Dictionary (c x) -> f x)
+  -> Record_ f fields 
+methodRecord' u 
+  = mapRecordFields go (constrainedRecord @c @fields) 
+  where
+  go :: forall k x. PField k '[c] x -> Field k '[] f x 
+  go f@(Field Proxy) = Field (u (fieldToFirstDictionary f)) 
+  -- = proxyRecord @fields 
+  -- & constrained @c
+  -- & dropConstraints 
+  -- & mapRecordFunctors u
+
+constrainedRecord 
+  :: forall constraint fields. 
+     ( RecordApplicative fields
+     , AllTypes constraint fields 
+     ) 
+  => PRecord '[constraint] fields 
+constrainedRecord = constrain @constraint (rPure Proxy) 
+
+constrainedRecordOf  
+  :: forall constraint.
+     forall fields proxy. 
+     ( RecordApplicative fields
+     , AllTypes constraint fields 
+     ) 
+  => proxy constraint 
+  -> PRecord '[constraint] fields 
+constrainedRecordOf _ = constrainedRecord @constraint 
+
+{- OLD 
+
+    :: (forall x. Field k cs f x)
+    -> Record cs f kvs
+
+
+instance ( KnownSymbol k
+         , AllSatisfied cs v
+         , RecordApplicative kvs
+         ) 
+       => RecordApplicative ('(k,v) ': kvs) 
+  where
+  rPure s = field s :* rPure s
+  {-# INLINE rPure #-}
+
+
+-- constrainedRecord 
+--   :: ( RecordApplicative fields
+--      , AllTypes constraint fields 
+--      ) 
+--   => PRecord (constraint ': cs) fields 
+-- constrainedRecord = rPure Proxy 
+
+-}
+
+rTraverse
+  :: forall h f g cs rs. 
+     ( Applicative h
+     ) 
+  => (forall x. String -> f x -> h (g x))
+  ->    Record cs f rs
+  -> h (Record cs g rs)
+rTraverse u = go
+  where
+  go
+    :: forall ss.
+       ( Applicative h
+       ) 
+    =>    Record cs f ss
+    -> h (Record cs g ss)
+  go = \case 
+      R                   -> pure R 
+      (f@(Field x) :* xs) -> (:*) 
+           <$> (let k = reifyFieldName f in Field <$> u k x) 
+           <*> go xs
+{-# INLINABLE rTraverse #-}
+
+fieldToSymbolDictionary :: Field k cs f a -> Dictionary (KnownSymbol k) 
+fieldToSymbolDictionary Field{} = Dict 
+
+symbolValue_Dictionary :: forall k. Dictionary (KnownSymbol k) -> String 
+symbolValue_Dictionary Dict = symbolVal (P @k)
+
+fieldToFirstDictionary :: Field k (c ': cs) f a -> Dictionary (c a)   
+fieldToFirstDictionary Field{} = Dict
 
 --------------------------------------------------------------------------------
 
@@ -537,8 +676,16 @@ displayIdentityField f@(Field (Identity x)) = k <> " = " <> v
    k = reifyFieldName f
    v = show x
 
+{-| reifies the key of a field. 
+
+i.e. the type-level string @k@ becomes a (value-level) string. 
+
+-}
 reifyFieldName :: forall k cs f a. Field k cs f a -> String 
 reifyFieldName Field{} = symbolVal (Proxy :: Proxy k)
+
+-- reifyKey :: forall k. forall cs f a. Field k cs f a -> String 
+-- reifyKey Field{} = symbolVal (P @k)
 
 (***) :: (KnownSymbol k) 
      => Field k '[] f a
