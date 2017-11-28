@@ -38,6 +38,52 @@ defaultPrecedence = 10
 precedenceOfRecordCons :: Int 
 precedenceOfRecordCons = 7
 
+-- | 
+type Record_ f = Record '[] f 
+
+-- | 
+
+type Field_ k f = Field k '[] f 
+
+type R cs = IRecord cs 
+
+type F k cs = IField k cs 
+
+-- | 
+type IRecord cs = Record cs Identity 
+
+-- | 
+type IField k cs = Field k cs Identity
+
+-- | 
+type PRecord cs = Record cs Proxy  
+
+-- | 
+type PField k cs = Field k cs Proxy 
+
+-- | 
+type IRecord_ = IRecord '[] 
+
+-- | 
+type IField_ k = IField k '[] 
+
+-- | 
+type PRecord_ = PRecord '[]  
+
+-- | 
+type PField_ k = PField k '[] 
+
+field_ 
+  :: forall (k :: Symbol). 
+     forall f a. 
+    ( KnownSymbol k
+    ) 
+  => f a
+  -> Field_ k f a 
+field_ = Field 
+
+--------------------------------------------------------------------------------
+
 {-| 
 
 `fields` should be a type-level map (i.e. `Map Symbol *`), 
@@ -171,6 +217,8 @@ recordToList = \case
 {-| like @f@ composed with a @KnownSymbol@ dictionary. 
 almost an @Identity@ functor.
 
+pattern matching on a 'Field' exposes the constraints being stored. 
+
 -}
 data Field 
   :: Symbol             -- otherwise, TypeApplication doesn't work with the constructor 
@@ -241,6 +289,16 @@ mapRecord η = \case
 -- infixr 5  <+>
 -- infixl 8 <<$>>
 -- infixl 8 <<*>>
+
+constrained 
+  :: forall (c :: * -> Constraint).
+     forall cs f kvs. 
+     ( AllTypes c kvs
+     )
+  => Record       cs  f kvs
+  -> Record (c ': cs) f kvs
+constrained = reifyConstraint (P @c)
+
 
 unconstrained
   :: (cs ~ '[]) 
@@ -396,6 +454,42 @@ type family AllSatisfied cs t :: Constraint where
 --                 ) 
 --                 => !(f a) 
 --                 -> Constrained' c k f a 
+
+--------------------------------------------------------------------------------
+
+class RecordApplicative kvs where
+  rPure
+    :: (forall x. f x)
+    -> Record_ f kvs
+
+instance RecordApplicative '[] where
+  rPure _ = R
+  {-# INLINE rPure #-}
+
+instance (KnownSymbol k, RecordApplicative kvs) 
+       => RecordApplicative ('(k,v) ': kvs) 
+  where
+  rPure s = field_ s :* rPure s
+  {-# INLINE rPure #-}
+
+proxyRecord 
+  :: (RecordApplicative fields) 
+  => PRecord_ fields 
+proxyRecord = rPure Proxy 
+  -- where 
+  -- go :: PField_ k a
+  -- go = Field Proxy 
+  --  R -> R 
+  --  (x :* xs) ->
+
+proxyRecordOf  
+  :: forall fields. 
+     forall proxy. 
+     (RecordApplicative fields) 
+  => proxy fields 
+  -> PRecord_ fields 
+proxyRecordOf _ = proxyRecord @fields 
+
 
 --------------------------------------------------------------------------------
 

@@ -6,7 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-} -- to test inference
 module Vinyl.Fields.Example where
 import Vinyl.Fields
---import Vinyl.Fields.Json 
+import Vinyl.Fields.Json () 
 import System.Environment
 
 import Data.Functor.Identity
@@ -64,15 +64,19 @@ mainWith s = do
  putStrLn ""
  print $ (fmap . fmap) (constrain' @Show) dog_XOverloadedLabels_list
 
-type Dog f = 
-    Record '[Show] f ["name" ::: String, "age" ::: Int]
+ putStrLn ""
+ print $ proxyDog 
+
+type Dog = ["name" ::: String, "age" ::: Int]
+
+proxyDog = proxyRecord @Dog 
 
 dog_Readable
   = Field @"name" (Identity "loki") 
  :* Field @"age"  (Identity 7) 
  :* R
 
-dog_Annotated :: Dog I
+dog_Annotated :: Record '[Show] I Dog 
 dog_Annotated =
     field @"name" (I "loki") :* field @"age" (I @Int 7) :* R
 
