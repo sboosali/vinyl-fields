@@ -3,10 +3,73 @@
 
 
 
+
+
+
+TODO custom type errors.  
+
+data ErrorMessage
+ = Text Symbol
+ | forall t. ShowType t
+ | ErrorMessage :<>: ErrorMessage
+ | ErrorMessage :$$: ErrorMessage
+
+
+
+
+
+
+
+https://kseo.github.io/posts/2017-01-16-type-level-functions-using-closed-type-families.html
+
+type family Fmap (f :: k -> j) (xs :: [k]) :: [j] where
+   Fmap f '[]       = '[]
+   Fmap f (x ': xs) = f x ': Fmap f xs
+
+type family Pair (x :: *) where
+  Pair x = (x, x)
+
+λ> :kind! Fmap Pair [Char,Bool,Int]
+:: [*]
+= '[(Char, Char), (Bool, Bool), (Int, Int)]
+
+
+
+
+
 --------------------------------------------------------------------------------
 Older Versions, including their problems 
 
 {-
+
+
+
+
+applyRecord
+  :: forall p f g as bs.
+     ( 
+     )
+  => (forall x y. p x y -> f x -> g y)
+  -> URecord_ p (ZipTypes as bs) -> Record_ f as -> Record_ g bs
+applyRecord u = \case
+  R                         -> \R               -> R
+  (Field (Uncurry p) :* ps) -> \(Field a :* as) -> u p a :* applyRecord u ps as
+
+
+
+  :: (forall x  .     f x  ->     g x  ->     h x)
+  -> (forall xs . Rec f xs -> Rec g xs -> Rec h xs)
+
+
+
+applyRecord
+  :: ( as ~ GetInputs  abs
+     , bs ~ GetOutputs abs
+     )
+  => (forall x y. p x y -> f x -> g y)
+  -> URecord_ p abs -> Record_ f as -> Record_ g bs
+applyRecord = todo
+
 
 
 

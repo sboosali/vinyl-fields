@@ -31,6 +31,31 @@ infixr 1 ***
 infix  2 -:
 infix  2 =:
 
+{-| type-level @fmap@, for type-level lists only, poly kinded.
+
+for example:
+
+@
+>>> :kind! Fmap Pair [Char,Bool,Int]
+    :: [*]
+    = '[(Char, Char), (Bool, Bool), (Int, Int)]
+@
+
+given:
+
+@
+-- type-level @(,)@ 
+type family Pair (x :: *) where
+  Pair x = (x, x)
+@
+
+for more details on Type Families, see https://kseo.github.io/posts/2017-01-16-type-level-functions-using-closed-type-families.html
+
+-}
+type family Fmap (f :: k -> j) (xs :: [k]) :: [j] where
+   Fmap f '[]       = '[]
+   Fmap f (x ': xs) = f x ': Fmap f xs
+
 -- | the default precedence for application of alphanumeric functions
 defaultPrecedence :: Int 
 defaultPrecedence = 10
@@ -323,7 +348,8 @@ dropConstraints = mapRecordFields go
 @
 
 -}
-type (:::) k a = '(k, a) 
+type (:::) k a = '(k, a)
+infixr 1 ::: 
 
 {-| constrain each field name in a record with the first constraint @ck@ (frequently, `KnownSymbol`), 
 and constrain each field type in that record with the second constraint @cv@. 
@@ -370,12 +396,53 @@ type family GetTypes fields where
 
 type family AllConstrained c ts :: Constraint where
   AllConstrained c '[] = ()
-  AllConstrained c (t ': ts) = (c t, AllConstrained c ts)
-
+  AllConstrained c (t ': ts) = (c t, AllConstrained c ts) -- '
 
 type family AllSatisfied cs t :: Constraint where
     AllSatisfied '[]       t = ()
-    AllSatisfied (c ': cs) t = (c t, AllSatisfied cs t)
+    AllSatisfied (c ': cs) t = (c t, AllSatisfied cs t) -- '
+
+-- | a type level @fmap (fmap fst)@
+type family GetInputs fields where 
+  GetInputs '[]                        = '[] 
+  GetInputs ('(k, '(a, _b)) ': fields) = '(k, a) ': GetInputs fields  -- '
+
+-- | a type level @fmap (fmap snd)@
+type family GetOutputs fields where 
+  GetOutputs '[]                        = '[] 
+  GetOutputs ('(k, '(_a, b)) ': fields) = '(k, b) ': GetOutputs fields  -- '
+
+{- | e.g. @(abs ~ ZipTypes as bs) => ...@. the key is must match. and in particular, the lengths must match.
+
+for example, given @{"a":_, "b":_}@: 
+
+>>> :kind! ZipTypes '["a" ::: Integer, "b" ::: Bool] '["a" ::: String, "b" ::: Char]
+  :: [(Symbol, (*, *))]
+  = '['("a", '(Integer, [Char])), '("b", '(Bool, Char))]
+
+stays opaque when the keys don't match. given @{"a":_, "b":_}@ and @{"x":_, "b":_}@:
+
+>>> :kind! ZipTypes '["a" ::: Integer, "b" ::: Bool] '["x" ::: String, "b" ::: Char]
+  :: [(Symbol, (*, *))]
+  = ZipTypes '["a" ::: Integer, "b" ::: Bool] '["x" ::: String, "b" ::: String]
+
+partially evaluates, given @{"a":_, "b":_}@ and @{"a":_, "y":_}@:
+
+>>> :kind! ZipTypes '["a" ::: Integer, "b" ::: Bool] '["a" ::: String, "y" ::: Char]
+  :: [(Symbol, (*, *))]
+  = '("a", '(Integer, [Char])) ': ZipTypes '["b" ::: Bool] '["y" ::: Char]
+
+
+-} 
+type family ZipTypes as bs where 
+  ZipTypes '[]            '[]            = '[] 
+  ZipTypes ('(s,a) ': as) ('(s,b) ': bs) = '(s, '(a,b)) ': ZipTypes as bs -- '
+
+-- type Example_ZipTypes = ZipTypes ['("a",Integer),'("b",Bool)] ['("c",String),'("b",String)]  
+
+{-|
+
+-}
 
 --------------------------------------------------------------------------------
 

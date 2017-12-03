@@ -53,6 +53,7 @@ library
   -fwarn-incomplete-record-updates
   -fwarn-identities
   -fwarn-missing-fields
+  -Wnoncanonical-monad-instances 
 
  default-extensions: AutoDeriveTypeable DeriveDataTypeable DeriveGeneric
                      DeriveFunctor DeriveFoldable DeriveTraversable
@@ -61,14 +62,17 @@ library
                      NamedFieldPuns RecordWildCards TupleSections
                      MultiWayIf DoAndIfThenElse EmptyDataDecls
                      MultiParamTypeClasses FlexibleContexts FlexibleInstances
-                     TypeFamilies FunctionalDependencies
+                     FunctionalDependencies 
                      ScopedTypeVariables StandaloneDeriving
+                     -- TypeFamilies
+                     -- NOTE warning from GHCI "-XTypeFamilies will be used, but it implies -XMonoLocalBinds, and so can cause type errors in code which expects generalized local bindings."
 
  exposed-modules:
                  Vinyl.Fields
                  Vinyl.Fields.Types
                  Vinyl.Fields.Core		 
                  Vinyl.Fields.Json		 
+                 Vinyl.Fields.Fold 		 
 -- other-modules:
                  Vinyl.Fields.Extra
                  Vinyl.Fields.Example
@@ -82,7 +86,7 @@ library
              , hashable
              , semigroups
 
-             , vinyl 
+             , foldl
 
             --  , transformers
             --  , mtl
@@ -96,6 +100,8 @@ library
             , lens
             --  , exceptions
             , constraints 
+            -- , contravariant
+            -- , bifunctors
 
             , aeson
 

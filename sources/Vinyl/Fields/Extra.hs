@@ -8,7 +8,7 @@ import Prelude.Spiros hiding (I, pattern I, C, pattern C, P, pattern P)
 import Data.Functor.Classes
 
 data Uncurry :: (k -> j -> *) -> (k, j) -> * where 
-    Uncurry :: f a b -> Uncurry f '(a,b) 
+    Uncurry :: !(p a b) -> Uncurry p '(a,b) 
 
 type Showing a = Int -> a -> ShowS 
 
