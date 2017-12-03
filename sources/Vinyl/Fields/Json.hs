@@ -46,6 +46,27 @@ ERROR
 
 --------------------------------------------------------------------------------
 
+{-
+
+Decoding without FromJSON instances: 
+
+eitherDecodeWith :: Parser Value -> (Value -> IResult a) -> ByteString -> Either (JSONPath, String)
+
+data IResult a
+| IError JSONPath String	 
+| ISuccess a
+
+type JSONPath = [JSONPathElement]
+
+data JSONPathElement
+| Key Text	
+JSON path element of a key into an object, "object.key".
+| Index !Int	
+JSON path element of an index into an array, "array[index]".
+
+
+-}
+
 decodeRecord 
   :: forall fields. 
     ( AllTypes FromJSON fields 

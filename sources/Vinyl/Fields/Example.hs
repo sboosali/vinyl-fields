@@ -7,13 +7,17 @@
 module Vinyl.Fields.Example where
 import Vinyl.Fields
 import Vinyl.Fields.Json  
+import Vinyl.Fields.Fold () 
 
-import System.Environment
+import qualified Data.Aeson as J
 -- import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.ByteString.Lazy (ByteString) 
 import Data.Functor.Identity
 -- import GHC.TypeLits
+import System.Environment
+--import Data.Either
+import Data.Kind 
 
 -- | for inference under `OverloadedStrings`, avoids the spurious @Defaulting to String@ warnings.
 s :: String -> String 
@@ -66,10 +70,10 @@ mainWith x = do
 --  print $ constrain @Show  dog_XOverloadedLabels_Identity'
  
  print $ unconstrained    dog_XOverloadedLabels_Identity1 
- print $ constrain' @Show dog_XOverloadedLabels_Identity2
+ print $ constrain' @Type @Show dog_XOverloadedLabels_Identity2
 
  putStrLn ""
- print $ (fmap . fmap) (constrain' @Show) dog_XOverloadedLabels_list
+ print $ (fmap . fmap) (constrain' @Type @Show) dog_XOverloadedLabels_list
 
  putStrLn ""
  print $ proxyDog 
@@ -82,15 +86,18 @@ mainWith x = do
  B.putStrLn $ dog_ByteString
  print $ dog_ByteString
  print $ dog_Jason 
+ B.putStrLn $ dogs_ByteString
+ print $ dogs_ByteString
+ print $ dogs_Jason 
 
  putStrLn "" 
- 
- 
+
+
 type Dog = ["name" ::: String, "age" ::: Int]
 
 proxyDog = proxyRecord @Dog 
 
-showableDog_constrained = constrainedRecord @Show @Dog 
+showableDog_constrained = constrainedRecord @Type @Show @Dog 
 
 -- showableDog_Dictionary = dictionaryRecord @Show @Dog 
 
@@ -99,8 +106,8 @@ maybeDog_Annotated = rPure Nothing :: Record_ Maybe Dog
 maybeDog_TypeApplications = rPure @Dog Nothing 
 
 dog_Readable
-  = Field @"name" (Identity (s "Loki")) 
- :* Field @"age"  (Identity 7) 
+  = Field @Type @"name" (Identity (s "Loki")) 
+ :* Field @Type @"age"  (Identity 7) 
  :* R
 
 dog_Annotated :: Record '[Show] I Dog 
@@ -156,8 +163,14 @@ dog_XOverloadedLabels_Identity'
   ***  R
 
 dog_ByteString :: ByteString
-dog_ByteString = "{ \"name\": \"loki\", \"age\": 7 }"
+dog_ByteString = "{ \"name\": \"loki\", \"age\": 7, \"EXTRA\": null }"
+
+dogs_ByteString :: ByteString
+dogs_ByteString = "[{ \"name\": \"loki\", \"age\": 7, \"EXTRA\": null }, { \"name\": \"leia\", \"age\": 4 }, { \"name\": \"marilou\", \"age\": 4 }]"
 
 dog_Jason :: Either String (R Dog) 
 dog_Jason = decodeRecord dog_ByteString
+
+dogs_Jason :: Either String [R Dog]
+dogs_Jason = J.eitherDecode' dogs_ByteString
 

@@ -1,7 +1,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 -- {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE KindSignatures, TypeOperators, TypeApplications #-}
-{-# LANGUAGE TypeFamilies, ConstraintKinds, PolyKinds #-} 
+{-# LANGUAGE TypeFamilies, ConstraintKinds #-} 
 {-# LANGUAGE ScopedTypeVariables, DataKinds, FlexibleInstances, FlexibleContexts, UndecidableInstances, GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, RankNTypes #-}
 -- {-# LANGUAGE AllowAmbiguousTypes #-}
@@ -113,9 +114,9 @@ they're all eventually applied).
 @
 
 -}
-data Record :: [* -> Constraint] 
-            -> (* -> *) 
-            -> [(Symbol,*)]
+data Record :: [k -> Constraint] 
+            -> (k -> *) 
+            -> [(Symbol,k)]
             -> *
     where
 
@@ -138,7 +139,9 @@ showsPrecedent_Record
 showsPrecedent_Record d r = showParen (d `greaterThan` defaultPrecedence) $
    showsPrecedent_Record' d (reifyConstraint cShow r)
    where
-   cShow = P @Show  -- P @(Type -> Constraint) @Show
+   cShow = P @(Type -> Constraint) @Show
+   -- P @(Type -> Constraint) @Show
+   -- P @Show 
 
 showsPrecedent_Record' 
   :: forall f cs as. (Show1 f) 
@@ -232,18 +235,18 @@ pattern matching on a 'Field' exposes the constraints being stored.
 -}
 data Field 
   :: Symbol             -- otherwise, TypeApplication doesn't work with the constructor 
-  -> [* -> Constraint] 
-  -> (* -> *) 
-  -> *
+  -> [k -> Constraint] 
+  -> (k -> *) 
+  -> k
   -> *
   where
 
-  Field :: forall (k :: Symbol) cs f a. 
-           ( KnownSymbol k
+  Field :: forall (s :: Symbol) cs f a. 
+           ( KnownSymbol s
            , AllSatisfied cs a
            ) 
         => !(f a) 
-        -> Field k cs f a 
+        -> Field s cs f a 
 
 -- | 'showField'
 instance (Show1 f) => Show (Field k (Show ': cs) f a) where
@@ -281,42 +284,43 @@ mapRecordFunctors
   :: (forall x. f x -> g x)
   -> Record cs f rs
   -> Record cs g rs
-mapRecordFunctors η = \case
+mapRecordFunctors u = \case
   R -> R
-  ((Field x) :* xs) -> Field (η x) :* (η `mapRecordFunctors` xs)
+  ((Field x) :* xs) -> Field (u x) :* (u `mapRecordFunctors` xs)
 {-# INLINE mapRecordFunctors #-}
 
 rmap
   :: (forall x. (c x) => f x -> g x)
   -> Record (c ': cs) f rs
   -> Record (c ': cs) g rs
-rmap η = \case
+rmap u = \case
   R -> R
-  (Field x :* xs) -> Field (η x) :* (η `rmap` xs)
+  (Field x :* xs) -> Field (u x) :* (u `rmap` xs)
 {-# INLINE rmap #-}
 
 mapRecordFields
   :: (forall x k. Field k cs f x -> Field k ds g x)
   -> Record cs f rs
   -> Record ds g rs
-mapRecordFields η = \case
+mapRecordFields u = \case
   R -> R
-  (Field x :* xs) -> η (Field x) :* (η `mapRecordFields` xs)
+  (Field x :* xs) -> u (Field x) :* (u `mapRecordFields` xs)
 {-# INLINE mapRecordFields #-}
 -- :: (forall x k. Field k (c ': cs) f x -> Field k (c ': cs) g x)
-
+ 
 -- infixr 5  <+>
 -- infixl 8 <<$>>
 -- infixl 8 <<*>>
 
 constrained 
-  :: forall (c :: * -> Constraint).
+  :: forall (c :: k -> Constraint).
      forall cs f kvs. 
      ( AllTypes c kvs
      )
   => Record       cs  f kvs
   -> Record (c ': cs) f kvs
-constrained = reifyConstraint (P @c)
+constrained = reifyConstraint (P @(k -> Constraint) @c)
+
 
 
 unconstrained
@@ -329,7 +333,7 @@ unconstrained = mapRecordFields go
   go (Field x) = Field x
 
 constrain' 
-  :: forall (c :: * -> Constraint).
+  :: forall (c :: k -> Constraint).
      forall cs cs' f kvs. 
      ( AllTypes c kvs
      , cs  ~ '[] 
@@ -337,7 +341,7 @@ constrain'
      )
   => Record cs  f kvs
   -> Record cs' f kvs
-constrain' = dropConstraints' > reifyConstraint (P @c)
+constrain' = dropConstraints' > reifyConstraint (P @(k -> Constraint) @c)
 
 dropConstraints'
   :: (cs' ~ '[], cs' ~ cs) 
@@ -349,13 +353,13 @@ dropConstraints' = mapRecordFields go
   go (Field x) = Field x
 
 constrain 
-  :: forall (c :: * -> Constraint).
+  :: forall (c :: k -> Constraint).
      forall cs f kvs. 
      ( AllTypes c kvs
      )
   => Record cs   f kvs
   -> Record '[c] f kvs
-constrain = dropConstraints > reifyConstraint (P @c)
+constrain = dropConstraints > reifyConstraint  (P @(k -> Constraint) @c)
 
 dropConstraints
   :: Record cs  f kvs
@@ -540,16 +544,16 @@ from the methods of some class.
 
 -}
 methodRecord' 
-  :: forall c fields f.  
+  :: forall (c :: k -> Constraint) fields f.  
      ( AllTypes c fields
      , RecordApplicative fields
      )
   => (forall x. Dictionary (c x) -> f x)
   -> Record_ f fields 
 methodRecord' u 
-  = mapRecordFields go (constrainedRecord @c @fields) 
+  = mapRecordFields go (constrainedRecord @k @c @fields) 
   where
-  go :: forall k x. PField k '[c] x -> Field k '[] f x 
+  go :: forall s x. PField s '[c] x -> Field s '[] f x 
   go f@(Field Proxy) = Field (u (fieldToFirstDictionary f)) 
   -- = proxyRecord @fields 
   -- & constrained @c
@@ -557,22 +561,24 @@ methodRecord' u
   -- & mapRecordFunctors u
 
 constrainedRecord 
-  :: forall constraint fields. 
+  :: forall (constraint :: k -> Constraint) (fields :: [(Symbol,k)]). 
      ( RecordApplicative fields
      , AllTypes constraint fields 
      ) 
   => PRecord '[constraint] fields 
-constrainedRecord = constrain @constraint (rPure Proxy) 
+constrainedRecord = constrain @k @constraint (rPure (Proxy)) 
+-- (Proxy :: Proxy constraint))
+--  (Proxy @(k -> Constraint) @constraint))   
 
 constrainedRecordOf  
-  :: forall constraint.
+  :: forall (constraint :: k -> Constraint). 
      forall fields proxy. 
      ( RecordApplicative fields
      , AllTypes constraint fields 
      ) 
   => proxy constraint 
   -> PRecord '[constraint] fields 
-constrainedRecordOf _ = constrainedRecord @constraint 
+constrainedRecordOf _ = constrainedRecord @k @constraint 
 
 {- OLD 
 
@@ -625,7 +631,7 @@ fieldToSymbolDictionary :: Field k cs f a -> Dictionary (KnownSymbol k)
 fieldToSymbolDictionary Field{} = Dict 
 
 symbolValue_Dictionary :: forall k. Dictionary (KnownSymbol k) -> String 
-symbolValue_Dictionary Dict = symbolVal (P @k)
+symbolValue_Dictionary Dict = symbolVal (P @Symbol @k)
 
 fieldToFirstDictionary :: Field k (c ': cs) f a -> Dictionary (c a)   
 fieldToFirstDictionary Field{} = Dict
@@ -636,7 +642,7 @@ fieldToFirstDictionary Field{} = Dict
 -- injectGeneralRecord :: V.Rec f as -> Record f (FMAP ("",) as)
 
 reifyConstraint
-  :: forall (c :: * -> Constraint) cs f kvs proxy. 
+  :: forall (c :: k -> Constraint) cs (f :: k -> *) kvs proxy. 
      ( AllTypes c kvs 
      )
   => proxy c
