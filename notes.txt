@@ -45,6 +45,16 @@ Older Versions, including their problems
 
 
 
+  :$$: Text "the `as`-key "
+  :<>: ShowType sa
+  :<>: Text " doesn't match the `bs`-key "
+  :<>: ShowType sb
+  :<>: Text "."
+
+
+
+
+
 OverlappingInstances 
 
 instance (ZipFields fs as bs) => ZipFields

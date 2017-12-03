@@ -1,8 +1,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE KindSignatures, TypeOperators, TypeApplications #-}
-{-# LANGUAGE TypeFamilies, ConstraintKinds #-} 
-{-# LANGUAGE ScopedTypeVariables, DataKinds, FlexibleInstances, FlexibleContexts, UndecidableInstances, GADTs #-}
+{-# LANGUAGE PolyKinds, DataKinds, KindSignatures #-}
+{-# LANGUAGE TypeOperators, ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies, ConstraintKinds, FlexibleInstances, FlexibleContexts, UndecidableInstances #-}
+-- {-# LANGUAGE OverlappingInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-} 
 
@@ -15,6 +15,8 @@ import GHC.TypeLits
 
 {-|
 
+see https://ghc.haskell.org/trac/ghc/wiki/Proposal/CustomTypeErrors
+
 -}
 class ZipFields
   (fs :: [(Symbol, (k,j))])
@@ -23,11 +25,19 @@ class ZipFields
   where 
 
 instance ZipFields '[] '[] '[] where
-  
+
+{-
 instance (sa ~ sb, ZipFields fs as bs) => ZipFields
   ('(sa, '(a,b)) ': fs)
   ('(sa,      a) ': as)
   ('(sb,      b) ': bs)
+  where 
+-}
+ 
+instance (ZipFields fs as bs) => ZipFields
+  ('(s, '(a,b)) : fs)
+  ('(s,      a) : as)
+  ('(s,      b) : bs)
   where 
 
 {-NOTE
@@ -42,21 +52,22 @@ with type equality, the error is readable but not optimal:
 -}
 
     
--- instance (TypeError
---      ( Text "[ZipFields _ as bs] all keys must match for zipped records, but: the `as` key "
---   :<>: ShowType sa
---   :<>: Text " doesn't match the `bs` key "
---   :<>: ShowType sb)
---      ) => ZipFields
---   (fs)
---   ('(sa,a) : as)
---   ('(sb,b) : bs)
-
--- instance (ZipFields fs as bs) => ZipFields
---   ('(s, '(a,b)) ': fs)
---   ('(s,      a) ': as)
---   ('(s,      b) ': bs)
---   where 
+instance {-# OVERLAPS #-} (TypeError
+     ( Text "[ZipFields _ as bs] all keys must match for zipped records, but:" 
+  :$$: Text "  "
+  :<>: ShowType sa
+  :<>: Text " doesn't match "
+  :<>: ShowType sb
+  :<>: Text "."
+  :$$: Text "where the rest of the records at the mismatched key is:"
+  :$$: Text "  `as` ~ "
+  :<>: ShowType ('(sa,a) : as)
+  :$$: Text "  `bs` ~ "
+  :<>: ShowType ('(sb,b) : bs)
+     )) => ZipFields
+  (fs)
+  ('(sa,a) : as)
+  ('(sb,b) : bs)
 
 -- instance (TypeError
 --      ( Text "[ZipFields _ as bs] all keys must match for zipped records, but: the `as` key "
