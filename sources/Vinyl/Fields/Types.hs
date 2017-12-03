@@ -11,6 +11,7 @@
 module Vinyl.Fields.Types where
 import Vinyl.Fields.Extra
 import Vinyl.Fields.Core
+-- import Vinyl.Fields.TypeLevel
 
 import Data.Functor.Identity
 
@@ -30,31 +31,6 @@ infixr 1 ***
 
 infix  2 -:
 infix  2 =:
-
-{-| type-level @fmap@, for type-level lists only, poly kinded.
-
-for example:
-
-@
->>> :kind! Fmap Pair [Char,Bool,Int]
-    :: [*]
-    = '[(Char, Char), (Bool, Bool), (Int, Int)]
-@
-
-given:
-
-@
--- type-level @(,)@ 
-type family Pair (x :: *) where
-  Pair x = (x, x)
-@
-
-for more details on Type Families, see https://kseo.github.io/posts/2017-01-16-type-level-functions-using-closed-type-families.html
-
--}
-type family Fmap (f :: k -> j) (xs :: [k]) :: [j] where
-   Fmap f '[]       = '[]
-   Fmap f (x ': xs) = f x ': Fmap f xs
 
 -- | the default precedence for application of alphanumeric functions
 defaultPrecedence :: Int 
@@ -339,18 +315,6 @@ dropConstraints = mapRecordFields go
     
 -}
 
-{-| sugar for a type-level pair.
-
-@
->>> :set 
->>> :set -XDataKinds
->>> type Dog f = Record f ["name" ::: String, "age" ::: Natural]
-@
-
--}
-type (:::) k a = '(k, a)
-infixr 1 ::: 
-
 {-| constrain each field name in a record with the first constraint @ck@ (frequently, `KnownSymbol`), 
 and constrain each field type in that record with the second constraint @cv@. 
 
@@ -440,9 +404,6 @@ type family ZipTypes as bs where
 
 -- type Example_ZipTypes = ZipTypes ['("a",Integer),'("b",Bool)] ['("c",String),'("b",String)]  
 
-{-|
-
--}
 
 --------------------------------------------------------------------------------
 

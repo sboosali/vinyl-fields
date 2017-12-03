@@ -72,7 +72,8 @@ library
                  Vinyl.Fields.Types
                  Vinyl.Fields.Core		 
                  Vinyl.Fields.Json		 
-                 Vinyl.Fields.Fold 		 
+                 Vinyl.Fields.Fold
+                 Vinyl.Fields.TypeLevel 		 
 -- other-modules:
                  Vinyl.Fields.Extra
                  Vinyl.Fields.Example

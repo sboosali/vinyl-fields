@@ -40,7 +40,29 @@ type family Pair (x :: *) where
 --------------------------------------------------------------------------------
 Older Versions, including their problems 
 
-{-
+
+
+
+
+
+OverlappingInstances 
+
+instance (ZipFields fs as bs) => ZipFields
+  ('(s, '(a,b)) ': fs)
+  ('(s,      a) ': as)
+  ('(s,      b) ': bs)
+  where 
+
+instance (TypeError
+     ( Text "[ZipFields _ as bs] all keys must match for zipped records, but: the `as` key "
+  :<>: ShowType sa
+  :<>: Text " doesn't match the `bs` key "
+  :<>: ShowType sb)
+     ) => ZipFields
+  (fs)
+  ('(sa,a) : as)
+  ('(sb,b) : bs)
+
 
 
 

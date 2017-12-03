@@ -6,6 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-} -- to test inference
 module Vinyl.Fields.Example where
 import Vinyl.Fields
+import Vinyl.Fields.TypeLevel
 import Vinyl.Fields.Json  
 import Vinyl.Fields.Fold () 
 
